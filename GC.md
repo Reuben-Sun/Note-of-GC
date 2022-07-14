@@ -1,5 +1,9 @@
 # GC学习
 
+### 前言
+
+《垃圾回收的算法与实现》读书笔记，其中的代码大多为伪代码
+
 ### 一：概念
 
 GC，Garbage Collection，垃圾回收
@@ -214,10 +218,10 @@ void scane_zct(){
 - 什么都不做
   - 这会导致如果一个物体被引用的次数特别多，超出了目前表示的范围，即使他变成了垃圾也无法回收
   - 但是，事实上绝大多数对象计数值一直在0和1间变化（生成后立刻回收），所以很少出现溢出
+  -  而且一个对象被频繁引用，说明他十分重要，十分重要的东西被回收的概率并不大
   - 很多时候不需要保证内存永不泄露，只需要保证一段时间内不泄露就行，很多软件，用户不会一直开着的
 - 结合使用标记清除算法
-  - 在没有溢出时，就当普通的引用计数法
-  - 一旦溢出，就先清空计数值，完整走一遍标记清除法
+  - 什么都不做，可能会导致内存耗尽，如果耗尽，那就用标记清除法清一次（相当于垃圾太多了，管不来了，就干脆来一次大扫除）
 
 ```c++
 //标记
@@ -282,13 +286,106 @@ void delete_ptr(ptr){
 
 只对可能会有循环引用的对象使用标记清除法，其他对象使用引用计数法
 
+每个对象会有两个状态位（于是就有四个状态），分别为
 
+- BLACK：绝对不是垃圾的对象（初始值）
+- WHILE：绝对是垃圾的对象
+- GRAY：搜索完毕的对象
+- HATCH：可能是循环垃圾的对象
 
+```c++
+void dec_ref_cnt(obj){
+    obj.ref_cnt--;
+    if(obj.ref_cnt == 0){
+        delete(obj);
+    }
+    else if(obj.color != HATCH){
+        obj.color = HATCH;
+        queue.push(obj);
+    }
+}
+```
 
+对放入队列的对象进行标记清除算法
 
+```c++
+Object new_obj(size){
+    obj = pickup_chunk(size);	//分配内存
+    if(obj != null){	//如果分配成功
+        obj.color = BLACK;
+        obj.ref_cnt = 1;
+        return obj;
+    }
+    else if(!queue.empty()){	//说明现在空间不足，要回收垃圾，先看是否存在HATCH物体
+        scan_hatch_queue();		
+        return new_obj(size);	//回收queue内后重新尝试分配
+    }
+    else{
+        allocation_fall();
+    }
+}
+void scan_hatch_queue(){	//循环扫描队列，直至队列为空
+    obj = queue.pop();
+    if(obj.color == HATCH){
+        paint_gray(obj);	//把obj和其孩子变为GRAY，孩子们引用值--
+        scan_gray(obj);		//引用值>0涂黑，等于0涂白
+        collect_while(obj);
+    }
+    else if(!queue.empty()){
+        scane_hatch_queue();
+    }
+}
+void paint_gray(obj){
+    if(obj.color == (BLACK | HATCH)){	
+        obj.color = GRAY;	
+        for(child: obj.children){
+            (*child).ref_cnt--;
+            paint_gray(*child);
+        }
+    }
+}
+void scan_gray(obj){
+    if(obj.color == GRAY){
+        if(obj.ref_cnt > 0){
+            paint_black(obj);
+        }
+        else{
+            obj.color = WHITE;
+            for(child: children(obj)){
+                scan_gray(*child);
+            }
+        }
+    }
+}
+void paint_black(obj){
+     obj.color = BLACK;
+	 for(child : children(obj)){
+		(*child).ref_cnt++
+		if((*child).color != BLACK){
+			paint_black(*child)            
+        }          
+     }		
+}
+void collect_while(){
+    if(obj.color == WHILE){
+        obj.color = BLACK;
+        for(child: obj.children){
+            collect_while(*child);
+        }
+        reclaim(obj);
+    }
+}
+```
 
+优点
 
+- 可以回收循环引用
 
+缺点
+
+- 一个对象要被查找三次，导致最大暂停时间+++
+
+### 四：GC复制法
 
 
 
